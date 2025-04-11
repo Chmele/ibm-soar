@@ -2,6 +2,7 @@ package soar
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -26,7 +27,7 @@ func NewStompListener(h *HTTPClient, stompPort string, messageDestination string
 	}
 }
 
-func (l *StompListener) Listen() error {
+func (l *StompListener) Listen(ctx context.Context) (chan struct{}, error) {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	netConn, err := tls.DialWithDialer(
 		dialer,
@@ -35,7 +36,7 @@ func (l *StompListener) Listen() error {
 		&tls.Config{InsecureSkipVerify: true},
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	stompConn, err := stomp.Connect(netConn,
@@ -44,51 +45,72 @@ func (l *StompListener) Listen() error {
 		stomp.ConnOpt.Host(l.HTTPClient.Hostname),
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	sub, err := l.subscribe(stompConn)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	go l.STOMPLoop(sub, stompConn)
-	return nil
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		l.STOMPLoop(ctx, sub, stompConn)
+	}()
+	return done, nil
 }
 
-func (l *StompListener) STOMPLoop(sub *stomp.Subscription, stompConn *stomp.Conn) {
+func (l *StompListener) STOMPLoop(ctx context.Context, sub *stomp.Subscription, stompConn *stomp.Conn) {
 	var err error
-	defer stompConn.Disconnect()
-	for msg := range sub.C {
-		if msg.Err != nil {
-			log.Printf("Error receiving message: %v", msg.Err)
-			continue
+	defer func() {
+		log.Println("STOMP Disconnecting")
+		stompConn.Disconnect()
+	}()
+	defer func() {
+		log.Println("STOMP Unsubscribing")
+		sub.Unsubscribe()
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("STOMP is shutting down")
+			return
+		case msg, ok := <-sub.C:
+			if !ok {
+				log.Println("STOMP channel closed")
+				return
+			}
+			if msg.Err != nil {
+				log.Printf("Error receiving message: %v", msg.Err)
+				continue
+			}
+			go l.processFunctionMessage(msg)
+			go func() {
+				err = l.respondToFunctionMessage(msg, stompConn, FuncResponse{
+					MessageType: 0,
+					Message:     "Starting App Function ㊡",
+					Complete:    false,
+				})
+				if err != nil {
+					log.Printf("Error sending message %v", err)
+				}
+				err = l.respondToFunctionMessage(msg, stompConn, FuncResponse{
+					MessageType: 2,
+					Message:     "App function completed",
+					Complete:    true,
+					Results: &Results{
+						Version: 2.0,
+						Success: true,
+						Reason:  nil,
+						Content: "Plain text content",
+						Raw:     nil,
+					},
+				})
+				if err != nil {
+					log.Printf("Error sending message %v", err)
+				}
+			}()
 		}
-		go l.processFunctionMessage(msg)
-		go func() {
-			err = l.respondToFunctionMessage(msg, stompConn, FuncResponse{
-				MessageType: 0,
-				Message:     "Starting App Function ㊡",
-				Complete:    false,
-			})
-			if err != nil {
-				log.Printf("Error sending message %v", err)
-			}
-			err = l.respondToFunctionMessage(msg, stompConn, FuncResponse{
-				MessageType: 2,
-				Message:     "App function completed",
-				Complete:    true,
-				Results: &Results{
-					Version: 2.0,
-					Success: true,
-					Reason:  nil,
-					Content: "Plain text content",
-					Raw:     nil,
-				},
-			})
-			if err != nil {
-				log.Printf("Error sending message %v", err)
-			}
-		}()
 	}
 }
 
@@ -116,5 +138,10 @@ func (l *StompListener) respondToFunctionMessage(msg *stomp.Message, conn *stomp
 	if err != nil {
 		return err
 	}
-	return conn.Send("acks.201.test", "application/json", body, stomp.SendOpt.Header("correlation-id", correlationID))
+	return conn.Send(
+		fmt.Sprintf("acks.%d.%s", l.HTTPClient.Org.ID, l.MessageDestination),
+		"application/json",
+		body,
+		stomp.SendOpt.Header("correlation-id", correlationID),
+	)
 }
