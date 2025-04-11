@@ -55,7 +55,7 @@ func Connect(login, passcode string) error {
 			log.Printf("Error sending message 1: %v", err)
 		}
 
-		body2 := `{"message_type": 2, "message": "ERROR:\n\n'rest_api_url' is mandatory 🦊<script>alert(1);</script> and is not set. You must set this value to run this function", "complete": true}`
+		body2 := `{"message_type": 2, "message": "ERROR:\n\n'rest_api_url' is mandatory 🦊 <script>alert(1);</script> and is not set. You must set this value to run this function", "complete": true}`
 		err = stompConn.Send("acks.201.test", "application/json", []byte(body2), stomp.SendOpt.Header("correlation-id", correlationID))
 		if err != nil {
 			log.Printf("Error sending message 2: %v", err)
