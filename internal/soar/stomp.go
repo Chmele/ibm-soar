@@ -46,15 +46,19 @@ func (l *StompListener) Listen() error {
 	if err != nil {
 		return err
 	}
-	defer stompConn.Disconnect()
 
 	sub, err := l.subscribe(stompConn)
 	if err != nil {
 		return err
 	}
+	go l.STOMPLoop(sub, stompConn)
+	return nil
+}
 
-	for {
-		msg := <-sub.C
+func (l *StompListener) STOMPLoop(sub *stomp.Subscription, stompConn *stomp.Conn) {
+	var err error
+	defer stompConn.Disconnect()
+	for msg := range sub.C {
 		if msg.Err != nil {
 			log.Printf("Error receiving message: %v", msg.Err)
 			continue
@@ -76,17 +80,9 @@ func (l *StompListener) Listen() error {
 				Results: &Results{
 					Version: 2.0,
 					Success: true,
-					Reason: nil,
+					Reason:  nil,
 					Content: "Plain text content",
-					Raw: nil,
-					Metrics: Metrics{
-						Version: "1.0",
-						Package: "Test",
-						PackageVersion: "1.1.1",
-						Host: "host.com",
-						ExecutionTimeMs: 1001,
-						Timestamp: "2025-04-11 17:43:54",
-					},
+					Raw:     nil,
 				},
 			})
 			if err != nil {
@@ -108,7 +104,7 @@ func (l *StompListener) subscribe(conn *stomp.Conn) (*stomp.Subscription, error)
 func (l *StompListener) processFunctionMessage(msg *stomp.Message) error {
 	fc := new(FunctionCall)
 	if err := json.NewDecoder(bytes.NewReader(msg.Body)).Decode(fc); err != nil {
-		log.Printf(" Error unmarshalling json: %s", msg.Body)
+		return err
 	}
 	log.Printf("󰊕 Got function call STOMP message: %s", fc.Inputs)
 	return nil
