@@ -51,6 +51,6 @@ func (s *SOARClient) Session() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s", body)
+	fmt.Printf("%s\n\n", body)
 	return nil
 }
