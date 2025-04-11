@@ -47,6 +47,7 @@ func (l *StompListener) Listen() error {
 		stomp.ConnOpt.Login(l.HTTPClient.KeyId, l.HTTPClient.KeySecret),
 		stomp.ConnOpt.AcceptVersion(stomp.V12),
 		stomp.ConnOpt.Host(l.HTTPClient.Hostname),
+		stomp.ConnOpt.HeartBeat(0, 0),
 	)
 	if err != nil {
 		return err
@@ -80,6 +81,7 @@ func (l *StompListener) STOMPLoop(sub *stomp.Subscription, stompConn *stomp.Conn
 			log.Println("STOMP is shutting down")
 			return
 		case msg, ok := <-sub.C:
+			log.Println("MESSAGE!")
 			if !ok {
 				log.Println("STOMP channel closed")
 				return
@@ -123,11 +125,12 @@ func (l *StompListener) CompleteFunc(msg *stomp.Message, stompConn *stomp.Conn) 
 }
 
 func (l *StompListener) subscribe(conn *stomp.Conn) (*stomp.Subscription, error) {
+	Id := fmt.Sprintf("actions.%d.%s", l.HTTPClient.Org.ID, l.MessageDestination)
 	return conn.Subscribe(
-		fmt.Sprintf("actions.%d.%s", l.HTTPClient.Org.ID, l.MessageDestination),
-		stomp.AckAuto,
+		Id,
+		stomp.AckClientIndividual,
 		stomp.SubscribeOpt.Header("activemq.prefetchSize", "50"),
-		stomp.SubscribeOpt.Id("repl"),
+		stomp.SubscribeOpt.Id(Id),
 	)
 }
 
