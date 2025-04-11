@@ -73,6 +73,21 @@ func (l *StompListener) Listen() error {
 				MessageType: 2,
 				Message:     "App function completed",
 				Complete:    true,
+				Results: &Results{
+					Version: 2.0,
+					Success: true,
+					Reason: nil,
+					Content: "Plain text content",
+					Raw: nil,
+					Metrics: Metrics{
+						Version: "1.0",
+						Package: "Test",
+						PackageVersion: "1.1.1",
+						Host: "host.com",
+						ExecutionTimeMs: 1001,
+						Timestamp: "2025-04-11 17:43:54",
+					},
+				},
 			})
 			if err != nil {
 				log.Printf("Error sending message %v", err)
@@ -97,12 +112,6 @@ func (l *StompListener) processFunctionMessage(msg *stomp.Message) error {
 	}
 	log.Printf("󰊕 Got function call STOMP message: %s", fc.Inputs)
 	return nil
-}
-
-type FuncResponse struct {
-	MessageType int    `json:"message_type"`
-	Message     string `json:"message"`
-	Complete    bool   `json:"complete"`
 }
 
 func (l *StompListener) respondToFunctionMessage(msg *stomp.Message, conn *stomp.Conn, fr FuncResponse) error {
