@@ -17,17 +17,21 @@ type StompListener struct {
 	HTTPClient         *HTTPClient
 	StompPort          string
 	MessageDestination string
+	Ctx                context.Context
+	Done               chan struct{}
 }
 
-func NewStompListener(h *HTTPClient, stompPort string, messageDestination string) *StompListener {
+func NewStompListener(ctx context.Context, h *HTTPClient, stompPort string, messageDestination string) *StompListener {
 	return &StompListener{
 		HTTPClient:         h,
 		StompPort:          stompPort,
 		MessageDestination: messageDestination,
+		Ctx:                ctx,
+		Done:               make(chan struct{}),
 	}
 }
 
-func (l *StompListener) Listen(ctx context.Context) (chan struct{}, error) {
+func (l *StompListener) Listen() error {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	netConn, err := tls.DialWithDialer(
 		dialer,
@@ -36,7 +40,7 @@ func (l *StompListener) Listen(ctx context.Context) (chan struct{}, error) {
 		&tls.Config{InsecureSkipVerify: true},
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	stompConn, err := stomp.Connect(netConn,
@@ -45,23 +49,23 @@ func (l *StompListener) Listen(ctx context.Context) (chan struct{}, error) {
 		stomp.ConnOpt.Host(l.HTTPClient.Hostname),
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
+	log.Println("󱘖 Connected to STOMP")
 	sub, err := l.subscribe(stompConn)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	done := make(chan struct{})
+	log.Println("󱚣 Subscribed to queue", l.MessageDestination)
 	go func() {
-		defer close(done)
-		l.STOMPLoop(ctx, sub, stompConn)
+		defer close(l.Done)
+		l.STOMPLoop(sub, stompConn)
 	}()
-	return done, nil
+	return nil
 }
 
-func (l *StompListener) STOMPLoop(ctx context.Context, sub *stomp.Subscription, stompConn *stomp.Conn) {
-	var err error
+func (l *StompListener) STOMPLoop(sub *stomp.Subscription, stompConn *stomp.Conn) {
 	defer func() {
 		log.Println("STOMP Disconnecting")
 		stompConn.Disconnect()
@@ -72,7 +76,7 @@ func (l *StompListener) STOMPLoop(ctx context.Context, sub *stomp.Subscription, 
 	}()
 	for {
 		select {
-		case <-ctx.Done():
+		case <-l.Ctx.Done():
 			log.Println("STOMP is shutting down")
 			return
 		case msg, ok := <-sub.C:
@@ -80,38 +84,42 @@ func (l *StompListener) STOMPLoop(ctx context.Context, sub *stomp.Subscription, 
 				log.Println("STOMP channel closed")
 				return
 			}
-			if msg.Err != nil {
-				log.Printf("Error receiving message: %v", msg.Err)
-				continue
-			}
-			go l.processFunctionMessage(msg)
-			go func() {
-				err = l.respondToFunctionMessage(msg, stompConn, FuncResponse{
-					MessageType: 0,
-					Message:     "Starting App Function ㊡",
-					Complete:    false,
-				})
-				if err != nil {
-					log.Printf("Error sending message %v", err)
-				}
-				err = l.respondToFunctionMessage(msg, stompConn, FuncResponse{
-					MessageType: 2,
-					Message:     "App function completed",
-					Complete:    true,
-					Results: &Results{
-						Version: 2.0,
-						Success: true,
-						Reason:  nil,
-						Content: "Plain text content",
-						Raw:     nil,
-					},
-				})
-				if err != nil {
-					log.Printf("Error sending message %v", err)
-				}
-			}()
+			go l.CompleteFunc(msg, stompConn)
 		}
 	}
+}
+
+type ProcessFunc func(*stomp.Message, *stomp.Conn)
+
+func (l *StompListener) CompleteFunc(msg *stomp.Message, stompConn *stomp.Conn) {
+	if msg.Err != nil {
+		log.Printf("Received error message: %v", msg.Err)
+	}
+	l.processFunctionMessage(msg)
+	err := l.respondToFunctionMessage(msg, stompConn, FuncResponse{
+		MessageType: 0,
+		Message:     "Starting App Function ㊡",
+		Complete:    false,
+	})
+	if err != nil {
+		log.Printf("Error sending message %v", err)
+	}
+	err = l.respondToFunctionMessage(msg, stompConn, FuncResponse{
+		MessageType: 2,
+		Message:     "App function completed",
+		Complete:    true,
+		Results: &Results{
+			Version: 2.0,
+			Success: true,
+			Reason:  nil,
+			Content: "Plain text content",
+			Raw:     nil,
+		},
+	})
+	if err != nil {
+		log.Printf("Error sending message %v", err)
+	}
+
 }
 
 func (l *StompListener) subscribe(conn *stomp.Conn) (*stomp.Subscription, error) {
