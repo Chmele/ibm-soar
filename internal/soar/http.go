@@ -10,19 +10,19 @@ import (
 	"net/http"
 )
 
-type SOARClient struct {
+type HTTPClient struct {
 	Client    http.Client
 	Org       *Org
-	BaseUrl   string
 	KeyId     string
 	KeySecret string
+	Hostname string
 }
 
-func NewSOARClient(hostname, keyId, keySecret string) (*SOARClient, error) {
-	ret := &SOARClient{
-		BaseUrl:   fmt.Sprintf("https://%s/rest/", hostname),
+func NewHTTPClient(hostname, keyId, keySecret string) (*HTTPClient, error) {
+	ret := &HTTPClient{
 		KeyId:     keyId,
 		KeySecret: keySecret,
+		Hostname: hostname,
 		Client: http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -37,8 +37,8 @@ func NewSOARClient(hostname, keyId, keySecret string) (*SOARClient, error) {
 	return ret, nil
 }
 
-func (s *SOARClient) Request(method, url string, data io.Reader) (*http.Response, error) {
-	req, err := http.NewRequest(method, s.BaseUrl+url, data)
+func (s *HTTPClient) Request(method, url string, data io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest(method, fmt.Sprintf("https://%s/rest/", s.Hostname)+url, data)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func (s *SOARClient) Request(method, url string, data io.Reader) (*http.Response
 	return s.Client.Do(req)
 }
 
-func (s *SOARClient) GetOrg() (org *Org, err error) {
+func (s *HTTPClient) GetOrg() (org *Org, err error) {
 	resp, err := s.Request("GET", "session", nil)
 	if err != nil {
 		return nil, err

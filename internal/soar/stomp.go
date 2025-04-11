@@ -1,7 +1,9 @@
 package soar
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -10,27 +12,43 @@ import (
 	"github.com/go-stomp/stomp/v3"
 )
 
-func Connect(login, passcode string) error {
+type StompListener struct {
+	HTTPClient         *HTTPClient
+	StompPort          string
+	MessageDestination string
+}
+
+func NewStompListener(h *HTTPClient, stompPort string, messageDestination string) *StompListener {
+	return &StompListener{
+		HTTPClient:         h,
+		StompPort:          stompPort,
+		MessageDestination: messageDestination,
+	}
+}
+
+func (l *StompListener) Listen() error {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	netConn, err := tls.DialWithDialer(dialer, "tcp", "10.1.12.123:65001", &tls.Config{
-		InsecureSkipVerify: true,
-	})
+	netConn, err := tls.DialWithDialer(
+		dialer,
+		"tcp",
+		fmt.Sprintf("%s:%s", l.HTTPClient.Hostname, l.StompPort),
+		&tls.Config{InsecureSkipVerify: true},
+	)
 	if err != nil {
 		return err
 	}
 
 	stompConn, err := stomp.Connect(netConn,
-		stomp.ConnOpt.Login(login, passcode),
+		stomp.ConnOpt.Login(l.HTTPClient.KeyId, l.HTTPClient.KeySecret),
 		stomp.ConnOpt.AcceptVersion(stomp.V12),
-		stomp.ConnOpt.Host("10.1.12.123"),
+		stomp.ConnOpt.Host(l.HTTPClient.Hostname),
 	)
 	if err != nil {
-		log.Printf("STOMP error on connection: %v", err)
 		return err
 	}
 	defer stompConn.Disconnect()
 
-	sub, err := connectionHandler(stompConn)
+	sub, err := l.subscribe(stompConn)
 	if err != nil {
 		return err
 	}
@@ -41,35 +59,57 @@ func Connect(login, passcode string) error {
 			log.Printf("Error receiving message: %v", msg.Err)
 			continue
 		}
-
-		fmt.Printf("Headers:\n")
-		fmt.Printf("  %+v\n", msg.Header)
-		fmt.Printf("\nBody:\n%s\n\n", string(msg.Body))
-
-		correlationID := msg.Header.Get("correlation-id")
-		fmt.Printf("%s", correlationID)
-
-		body1 := `{"message_type": 0, "message": "Starting App Function: 'rest_api_2'", "complete": false}`
-		err = stompConn.Send("acks.201.test", "application/json", []byte(body1), stomp.SendOpt.Header("correlation-id", correlationID))
-		if err != nil {
-			log.Printf("Error sending message 1: %v", err)
-		}
-
-		body2 := `{"message_type": 2, "message": "ERROR:\n\n'rest_api_url' is mandatory 🦊 <script>alert(1);</script> and is not set. You must set this value to run this function", "complete": true}`
-		err = stompConn.Send("acks.201.test", "application/json", []byte(body2), stomp.SendOpt.Header("correlation-id", correlationID))
-		if err != nil {
-			log.Printf("Error sending message 2: %v", err)
-		}
+		go l.processFunctionMessage(msg)
+		go func() {
+			err = l.respondToFunctionMessage(msg, stompConn, FuncResponse{
+				MessageType: 0,
+				Message:     "Starting App Function ㊡",
+				Complete:    false,
+			})
+			if err != nil {
+				log.Printf("Error sending message %v", err)
+			}
+			err = l.respondToFunctionMessage(msg, stompConn, FuncResponse{
+				MessageType: 2,
+				Message:     "App function completed",
+				Complete:    true,
+			})
+			if err != nil {
+				log.Printf("Error sending message %v", err)
+			}
+		}()
 	}
 }
 
-func connectionHandler(conn *stomp.Conn) (*stomp.Subscription, error) {
-	sub, err := conn.Subscribe("actions.201.test", stomp.AckAuto,
+func (l *StompListener) subscribe(conn *stomp.Conn) (*stomp.Subscription, error) {
+	return conn.Subscribe(
+		fmt.Sprintf("actions.%d.%s", l.HTTPClient.Org.ID, l.MessageDestination),
+		stomp.AckAuto,
 		stomp.SubscribeOpt.Header("activemq.prefetchSize", "50"),
 		stomp.SubscribeOpt.Id("repl"),
 	)
-	if err != nil {
-		return nil, err
+}
+
+func (l *StompListener) processFunctionMessage(msg *stomp.Message) error {
+	fc := new(FunctionCall)
+	if err := json.NewDecoder(bytes.NewReader(msg.Body)).Decode(fc); err != nil {
+		log.Printf(" Error unmarshalling json: %s", msg.Body)
 	}
-	return sub, nil
+	log.Printf("󰊕 Got function call STOMP message: %s", fc.Inputs)
+	return nil
+}
+
+type FuncResponse struct {
+	MessageType int    `json:"message_type"`
+	Message     string `json:"message"`
+	Complete    bool   `json:"complete"`
+}
+
+func (l *StompListener) respondToFunctionMessage(msg *stomp.Message, conn *stomp.Conn, fr FuncResponse) error {
+	correlationID := msg.Header.Get("correlation-id")
+	body, err := json.Marshal(fr)
+	if err != nil {
+		return err
+	}
+	return conn.Send("acks.201.test", "application/json", body, stomp.SendOpt.Header("correlation-id", correlationID))
 }
