@@ -66,7 +66,7 @@ func (l *StompListener) Listen() error {
 	return nil
 }
 
-func (l *StompListener) STOMPLoop(sub *stomp.Subscription, stompConn *stomp.Conn) {
+func (l *StompListener) STOMPLoop(sub *stomp.Subscription, stompConn *stomp.Conn) error {
 	defer func() {
 		log.Println("STOMP Disconnecting")
 		stompConn.Disconnect()
@@ -75,26 +75,34 @@ func (l *StompListener) STOMPLoop(sub *stomp.Subscription, stompConn *stomp.Conn
 		log.Println("STOMP Unsubscribing")
 		sub.Unsubscribe()
 	}()
+	errCh := make(chan error)
 	for {
 		select {
 		case <-l.Ctx.Done():
 			log.Println("STOMP is shutting down")
-			return
+			return nil
 		case msg, ok := <-sub.C:
 			if !ok {
 				log.Println("STOMP channel closed")
-				return
+				return nil
 			}
-			go l.CompleteFunc(msg, stompConn)
+			go func() {
+				errCh <- l.CompleteFunc(msg, stompConn)
+			}()
+		case err := <- errCh:
+			if err != nil {
+				return err
+			}
 		}
 	}
 }
 
 type ProcessFunc func(*stomp.Message, *stomp.Conn)
 
-func (l *StompListener) CompleteFunc(msg *stomp.Message, stompConn *stomp.Conn) {
+func (l *StompListener) CompleteFunc(msg *stomp.Message, stompConn *stomp.Conn) error {
 	if msg.Err != nil {
 		log.Printf("Received error message: %v", msg.Err)
+		return msg.Err
 	}
 	l.processFunctionMessage(msg)
 	err := l.respondToFunctionMessage(msg, stompConn, FuncResponse{
@@ -104,6 +112,7 @@ func (l *StompListener) CompleteFunc(msg *stomp.Message, stompConn *stomp.Conn) 
 	})
 	if err != nil {
 		log.Printf("Error sending message %v", err)
+		return err
 	}
 	err = l.respondToFunctionMessage(msg, stompConn, FuncResponse{
 		MessageType: 2,
@@ -119,8 +128,9 @@ func (l *StompListener) CompleteFunc(msg *stomp.Message, stompConn *stomp.Conn) 
 	})
 	if err != nil {
 		log.Printf("Error sending message %v", err)
+		return err
 	}
-
+	return nil
 }
 
 func (l *StompListener) subscribe(conn *stomp.Conn) (*stomp.Subscription, error) {

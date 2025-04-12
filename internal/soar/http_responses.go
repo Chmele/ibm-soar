@@ -46,3 +46,28 @@ type Org struct {
 	TwofactorCookieLifetimeSecs int            `json:"twofactor_cookie_lifetime_secs"`
 }
 
+
+type MessageDestination struct {
+	ID               int    `json:"id"`
+	Name             string `json:"name"`
+	ProgrammaticName string `json:"programmatic_name"`
+	DestinationType  int    `json:"destination_type"`
+	ExpectAck        bool   `json:"expect_ack"`
+	//Users            []any  `json:"users"`
+	UUID             string `json:"uuid"`
+	ExportKey        string `json:"export_key"`
+	//Tags skipped
+	APIKeys          []int  `json:"api_keys"`
+}
+
+type InboundDestination struct {
+	ID              int    `json:"id"`
+	DisplayName     string `json:"display_name"`
+	Name            string `json:"name"`
+	WritePrincipals []int  `json:"write_principals"`
+	ReadPrincipals  []int  `json:"read_principals"`
+	UUID            string `json:"uuid"`
+	Tags            []any  `json:"tags"`
+	Version         int    `json:"version"`
+	ExportKey       string `json:"export_key"`
+}

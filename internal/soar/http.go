@@ -8,32 +8,35 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 )
 
 type HTTPClient struct {
 	Client    http.Client
+	Session   *SessionResponseJson
 	Org       *Org
 	KeyId     string
 	KeySecret string
-	Hostname string
+	Hostname  string
 }
 
 func NewHTTPClient(hostname, keyId, keySecret string) (*HTTPClient, error) {
 	ret := &HTTPClient{
 		KeyId:     keyId,
 		KeySecret: keySecret,
-		Hostname: hostname,
+		Hostname:  hostname,
 		Client: http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
 		},
 	}
-	org, err := ret.GetOrg()
+	session, err := ret.GetOrg()
 	if err != nil {
 		return nil, err
 	}
-	ret.Org = org
+	ret.Session = session
+	ret.Org = &session.Orgs[0]
 	return ret, nil
 }
 
@@ -47,7 +50,7 @@ func (s *HTTPClient) Request(method, url string, data io.Reader) (*http.Response
 	return s.Client.Do(req)
 }
 
-func (s *HTTPClient) GetOrg() (org *Org, err error) {
+func (s *HTTPClient) GetOrg() (session *SessionResponseJson, err error) {
 	resp, err := s.Request("GET", "session", nil)
 	if err != nil {
 		return nil, err
@@ -63,5 +66,35 @@ func (s *HTTPClient) GetOrg() (org *Org, err error) {
 	if len(body.Orgs) < 1 {
 		return nil, errors.New("API key is not associated with any organization")
 	}
-	return &body.Orgs[0], nil
+	return body, nil
+}
+
+func (s *HTTPClient) OrgRequest(method, url string, data io.Reader) (*http.Response, error) {
+	return s.Request(method, fmt.Sprintf("orgs/%d/%s", s.Org.ID, url), data)
+}
+
+func (s *HTTPClient) GetMessageDestinationAvailable(name string) (bool, error) {
+	resp, err := s.OrgRequest("GET", "message_destinations/"+name, nil)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	var md MessageDestination
+	if err := json.NewDecoder(resp.Body).Decode(&md); err != nil {
+		return false, err
+	}
+	return slices.Contains(md.APIKeys, s.Session.APIKeyHandle), nil
+}
+
+func (s *HTTPClient) GetInboundDestinationAvailable(name string) (bool, error) {
+	resp, err := s.OrgRequest("GET", "inbound_destinations/"+name, nil)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	var md InboundDestination
+	if err := json.NewDecoder(resp.Body).Decode(&md); err != nil {
+		return false, err
+	}
+	return slices.Contains(md.ReadPrincipals, s.Session.APIKeyHandle) && slices.Contains(md.WritePrincipals, s.Session.APIKeyHandle), nil
 }
