@@ -81,7 +81,6 @@ func (l *StompListener) STOMPLoop(sub *stomp.Subscription, stompConn *stomp.Conn
 			log.Println("STOMP is shutting down")
 			return
 		case msg, ok := <-sub.C:
-			log.Println("MESSAGE!")
 			if !ok {
 				log.Println("STOMP channel closed")
 				return
