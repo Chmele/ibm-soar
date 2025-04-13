@@ -1,6 +1,7 @@
 package soar
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"time"
 )
 
 type HTTPClient struct {
@@ -18,14 +20,17 @@ type HTTPClient struct {
 	KeyId     string
 	KeySecret string
 	Hostname  string
+	Ctx       context.Context
 }
 
-func NewHTTPClient(hostname, keyId, keySecret string) (*HTTPClient, error) {
+func NewHTTPClient(ctx context.Context, hostname, keyId, keySecret string) (*HTTPClient, error) {
 	ret := &HTTPClient{
 		KeyId:     keyId,
 		KeySecret: keySecret,
 		Hostname:  hostname,
+		Ctx:       ctx,
 		Client: http.Client{
+			Timeout: 5 * time.Second,
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
@@ -45,6 +50,7 @@ func (s *HTTPClient) Request(method, url string, data io.Reader) (*http.Response
 	if err != nil {
 		return nil, err
 	}
+	req = req.WithContext(s.Ctx)
 	auth := base64.StdEncoding.EncodeToString(fmt.Appendf(nil, "%s:%s", s.KeyId, s.KeySecret))
 	req.Header.Add("Authorization", fmt.Sprintf("Basic %s", auth))
 	return s.Client.Do(req)
