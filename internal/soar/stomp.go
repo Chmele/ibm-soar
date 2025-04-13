@@ -133,8 +133,11 @@ func (l *StompListener) Subscribe() error {
 
 func (l *StompListener) HandleFunc(functions ...FunctionCallHandler) ProcessFunc {
 	return func(msg *stomp.Message) error {
+		fc, err := ParseFunctionMessage(msg.Body)
+		if err != nil {
+			return err
+		}
 		for _, f := range functions {
-			fc, err := ParseFunctionMessage(msg.Body)
 			fr, err := f(fc)
 			if err != nil {
 				return err
