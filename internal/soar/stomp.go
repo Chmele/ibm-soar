@@ -119,7 +119,7 @@ func (l *StompListener) Subscribe() error {
 	Id := fmt.Sprintf("actions.%d.%s", l.HTTPClient.Org.ID, l.MessageDestination)
 	sub, err := l.Conn.Subscribe(
 		Id,
-		stomp.AckClientIndividual,
+		stomp.AckAuto,
 		stomp.SubscribeOpt.Header("activemq.prefetchSize", "50"),
 		stomp.SubscribeOpt.Id(Id),
 	)
