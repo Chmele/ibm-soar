@@ -5,6 +5,10 @@ import (
 )
 
 
+func LoggingResponse (c *FunctionCall) (*FuncResponse, error) {
+	log.Printf("󰡱 Got Message: %s", c.Function.Name)
+	return nil, nil
+}
 
 func StartedResponse (*FunctionCall) (*FuncResponse, error) {
 	return &FuncResponse{
@@ -15,7 +19,6 @@ func StartedResponse (*FunctionCall) (*FuncResponse, error) {
 }
 
 func CompletedResponse (c *FunctionCall) (*FuncResponse, error) {
-	log.Printf("󰡱  Got Message: %s", c.Function.Name)
 	return &FuncResponse{
 		MessageType: 2,
 		Message:     "App function completed",

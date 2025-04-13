@@ -139,6 +139,10 @@ func (l *StompListener) HandleFunc(functions ...FunctionCallHandler) ProcessFunc
 		}
 		for _, f := range functions {
 			fr, err := f(fc)
+			// no-op handler
+			if fr == nil {
+				continue
+			}
 			if err != nil {
 				return err
 			}
@@ -156,7 +160,6 @@ func (l *StompListener) HandleFunc(functions ...FunctionCallHandler) ProcessFunc
 
 func (l *StompListener) SendFunctionResponse(msg *stomp.Message, body []byte) error {
 	correlationID := msg.Header.Get("correlation-id")
-	fmt.Printf("Sending ack message: %s\nID: %s\n", body, correlationID)
 	return l.Conn.Send(
 		fmt.Sprintf("acks.%d.%s", l.HTTPClient.Org.ID, l.MessageDestination),
 		"application/json",
