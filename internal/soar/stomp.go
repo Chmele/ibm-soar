@@ -5,8 +5,9 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"time"
 
@@ -26,11 +27,11 @@ type StompListener struct {
 
 func NewStompListener(h *HTTPClient, opts ...StompOption) (*StompListener, error) {
 	ret := &StompListener{
-		HTTPClient:         h,
-		StompPort:          "65001",
-		Ctx:                context.Background(),
-		Done:               make(chan struct{}),
-		Insecure:           false,
+		HTTPClient: h,
+		StompPort:  "65001",
+		Ctx:        context.Background(),
+		Done:       make(chan struct{}),
+		Insecure:   false,
 	}
 	for _, opt := range opts {
 		err := opt(ret)
@@ -50,12 +51,13 @@ func (l *StompListener) Listen(f ...FunctionCallHandler) error {
 	if err := l.ConnectSTOMP(netConn); err != nil {
 		return err
 	}
-	log.Println("Connected to STOMP")
+	slog.Info("Connected to STOMP")
 
 	if err := l.Subscribe(); err != nil {
 		return err
 	}
-	log.Println("Subscribed to queue", l.MessageDestination)
+	slog.Info("Subscribed to queue",
+		slog.String("message_destination", l.MessageDestination))
 	go func() {
 		defer close(l.Done)
 		l.STOMPLoop(f...)
@@ -90,23 +92,22 @@ func (l *StompListener) ConnectSTOMP(connection net.Conn) error {
 
 func (l *StompListener) STOMPLoop(f ...FunctionCallHandler) error {
 	defer func() {
-		log.Println("STOMP Disconnecting")
+		slog.Info("STOMP Disconnecting")
 		l.Conn.Disconnect()
 	}()
 	defer func() {
-		log.Println("STOMP Unsubscribing")
+		slog.Info("STOMP Unsubscribing")
 		l.Subscription.Unsubscribe()
 	}()
 	errCh := make(chan error)
 	for {
 		select {
 		case <-l.Ctx.Done():
-			log.Println("STOMP is shutting down")
+			slog.Info("STOMP is shutting down")
 			return nil
 		case msg, ok := <-l.Subscription.C:
 			if !ok {
-				log.Println("STOMP channel closed")
-				return nil
+				return errors.New("Attempted to read closed STOMP channel")
 			}
 			go func() {
 				errCh <- l.HandleFunc(f...)(msg)
@@ -181,4 +182,3 @@ func ParseFunctionMessage(b []byte) (*FunctionCall, error) {
 	}
 	return call, nil
 }
-

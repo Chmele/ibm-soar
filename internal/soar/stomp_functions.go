@@ -1,24 +1,23 @@
 package soar
 
 import (
-	"log"
+	"log/slog"
 )
 
-
-func LoggingResponse (c *FunctionCall) (*FuncResponse, error) {
-	log.Printf("󰡱 Got Message: %s", c.Function.Name)
+func LoggingResponse(c *FunctionCall) (*FuncResponse, error) {
+	slog.Info("Recieved function call", slog.String("function_name", c.Function.Name))
 	return nil, nil
 }
 
-func StartedResponse (*FunctionCall) (*FuncResponse, error) {
+func StartedResponse(*FunctionCall) (*FuncResponse, error) {
 	return &FuncResponse{
 		MessageType: 0,
-		Message:     "Starting App Function ㊡",
+		Message:     "Starting App Function",
 		Complete:    false,
 	}, nil
 }
 
-func CompletedResponse (c *FunctionCall) (*FuncResponse, error) {
+func CompletedResponse(c *FunctionCall) (*FuncResponse, error) {
 	return &FuncResponse{
 		MessageType: 2,
 		Message:     "App function completed",
@@ -30,5 +29,3 @@ func CompletedResponse (c *FunctionCall) (*FuncResponse, error) {
 		},
 	}, nil
 }
-
-
