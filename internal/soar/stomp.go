@@ -50,12 +50,12 @@ func (l *StompListener) Listen(f ...FunctionCallHandler) error {
 	if err := l.ConnectSTOMP(netConn); err != nil {
 		return err
 	}
-	log.Println("󱘖 Connected to STOMP")
+	log.Println("Connected to STOMP")
 
 	if err := l.Subscribe(); err != nil {
 		return err
 	}
-	log.Println("󱚣 Subscribed to queue", l.MessageDestination)
+	log.Println("Subscribed to queue", l.MessageDestination)
 	go func() {
 		defer close(l.Done)
 		l.STOMPLoop(f...)
