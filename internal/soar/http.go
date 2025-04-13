@@ -23,7 +23,7 @@ type HTTPClient struct {
 	Ctx       context.Context
 }
 
-func NewHTTPClient(ctx context.Context, hostname, keyId, keySecret string) (*HTTPClient, error) {
+func NewHTTPClient(ctx context.Context, hostname, keyId, keySecret string, insecure bool) (*HTTPClient, error) {
 	ret := &HTTPClient{
 		KeyId:     keyId,
 		KeySecret: keySecret,
@@ -32,7 +32,7 @@ func NewHTTPClient(ctx context.Context, hostname, keyId, keySecret string) (*HTT
 		Client: http.Client{
 			Timeout: 5 * time.Second,
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure},
 			},
 		},
 	}
