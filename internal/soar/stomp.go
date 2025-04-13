@@ -34,12 +34,12 @@ func NewStompListener(ctx context.Context, h *HTTPClient, stompPort string, mess
 	}
 }
 
-func (l *StompListener) Listen(f MessageHandler) error {
+func (l *StompListener) Listen(f []func(*stomp.Message) (*FuncResponse, error)) error {
 	netConn, err := l.ConnectTLS()
 	if err != nil {
 		return err
 	}
-	
+
 	if err := l.ConnectSTOMP(netConn); err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func (l *StompListener) ConnectSTOMP(connection net.Conn) error {
 	return nil
 }
 
-func (l *StompListener) STOMPLoop(f MessageHandler) error {
+func (l *StompListener) STOMPLoop(f []func(*stomp.Message) (*FuncResponse, error)) error {
 	defer func() {
 		log.Println("STOMP Disconnecting")
 		l.Conn.Disconnect()
@@ -130,22 +130,28 @@ func (l *StompListener) Subscribe() error {
 	return nil
 }
 
-func (l *StompListener) HandleFunc(f func(*stomp.Message) (*FuncResponse, error)) ProcessFunc {
+func (l *StompListener) HandleFunc(functions []func(*stomp.Message) (*FuncResponse, error)) ProcessFunc {
 	return func(msg *stomp.Message) error {
-		fr, err := f(msg)
-		if err != nil {
-			return err
+		for _, f := range functions {
+			fr, err := f(msg)
+			if err != nil {
+				return err
+			}
+			body, err := json.Marshal(fr)
+			if err != nil {
+				return err
+			}
+			if err := l.SendFunctionResponse(msg, body); err != nil {
+				return err
+			}
 		}
-		body, err := json.Marshal(fr)
-		if err != nil {
-			return err
-		}
-		return l.SendFunctionResponse(msg, body)
+		return nil
 	}
 }
 
 func (l *StompListener) SendFunctionResponse(msg *stomp.Message, body []byte) error {
 	correlationID := msg.Header.Get("correlation-id")
+	fmt.Printf("Sending ack message: %s\nID: %s\n", body, correlationID)
 	return l.Conn.Send(
 		fmt.Sprintf("acks.%d.%s", l.HTTPClient.Org.ID, l.MessageDestination),
 		"application/json",
