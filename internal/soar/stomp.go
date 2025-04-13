@@ -1,6 +1,7 @@
 package soar
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -34,7 +35,7 @@ func NewStompListener(ctx context.Context, h *HTTPClient, stompPort string, mess
 	}
 }
 
-func (l *StompListener) Listen(f []func(*stomp.Message) (*FuncResponse, error)) error {
+func (l *StompListener) Listen(f ...FunctionCallHandler) error {
 	netConn, err := l.ConnectTLS()
 	if err != nil {
 		return err
@@ -51,7 +52,7 @@ func (l *StompListener) Listen(f []func(*stomp.Message) (*FuncResponse, error)) 
 	log.Println("󱚣 Subscribed to queue", l.MessageDestination)
 	go func() {
 		defer close(l.Done)
-		l.STOMPLoop(f)
+		l.STOMPLoop(f...)
 	}()
 	return nil
 }
@@ -81,7 +82,7 @@ func (l *StompListener) ConnectSTOMP(connection net.Conn) error {
 	return nil
 }
 
-func (l *StompListener) STOMPLoop(f []func(*stomp.Message) (*FuncResponse, error)) error {
+func (l *StompListener) STOMPLoop(f ...FunctionCallHandler) error {
 	defer func() {
 		log.Println("STOMP Disconnecting")
 		l.Conn.Disconnect()
@@ -102,7 +103,7 @@ func (l *StompListener) STOMPLoop(f []func(*stomp.Message) (*FuncResponse, error
 				return nil
 			}
 			go func() {
-				errCh <- l.HandleFunc(f)(msg)
+				errCh <- l.HandleFunc(f...)(msg)
 			}()
 		case err := <-errCh:
 			if err != nil {
@@ -112,8 +113,8 @@ func (l *StompListener) STOMPLoop(f []func(*stomp.Message) (*FuncResponse, error
 	}
 }
 
-type MessageHandler func(*stomp.Message) (*FuncResponse, error)
 type ProcessFunc func(*stomp.Message) error
+type FunctionCallHandler func(*FunctionCall) (*FuncResponse, error)
 
 func (l *StompListener) Subscribe() error {
 	Id := fmt.Sprintf("actions.%d.%s", l.HTTPClient.Org.ID, l.MessageDestination)
@@ -130,10 +131,11 @@ func (l *StompListener) Subscribe() error {
 	return nil
 }
 
-func (l *StompListener) HandleFunc(functions []func(*stomp.Message) (*FuncResponse, error)) ProcessFunc {
+func (l *StompListener) HandleFunc(functions ...FunctionCallHandler) ProcessFunc {
 	return func(msg *stomp.Message) error {
 		for _, f := range functions {
-			fr, err := f(msg)
+			fc, err := ParseFunctionMessage(msg.Body)
+			fr, err := f(fc)
 			if err != nil {
 				return err
 			}
@@ -159,3 +161,12 @@ func (l *StompListener) SendFunctionResponse(msg *stomp.Message, body []byte) er
 		stomp.SendOpt.Header("correlation-id", correlationID),
 	)
 }
+
+func ParseFunctionMessage(b []byte) (*FunctionCall, error) {
+	call := new(FunctionCall)
+	if err := json.NewDecoder(bytes.NewReader(b)).Decode(call); err != nil {
+		return nil, err
+	}
+	return call, nil
+}
+

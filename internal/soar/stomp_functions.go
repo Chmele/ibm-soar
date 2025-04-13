@@ -1,16 +1,12 @@
 package soar
 
 import (
-	"bytes"
-	"encoding/json"
 	"log"
-
-	"github.com/go-stomp/stomp/v3"
 )
 
 
 
-func StartedResponse (*stomp.Message) (*FuncResponse, error) {
+func StartedResponse (*FunctionCall) (*FuncResponse, error) {
 	return &FuncResponse{
 		MessageType: 0,
 		Message:     "Starting App Function ㊡",
@@ -18,12 +14,8 @@ func StartedResponse (*stomp.Message) (*FuncResponse, error) {
 	}, nil
 }
 
-func CompletedResponse (m *stomp.Message) (*FuncResponse, error) {
-	call, err := ParseFunctionMessage(m.Body)
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("󰡱  Got Message: %s", call.Function.Name)
+func CompletedResponse (c *FunctionCall) (*FuncResponse, error) {
+	log.Printf("󰡱  Got Message: %s", c.Function.Name)
 	return &FuncResponse{
 		MessageType: 2,
 		Message:     "App function completed",
@@ -36,11 +28,4 @@ func CompletedResponse (m *stomp.Message) (*FuncResponse, error) {
 	}, nil
 }
 
-func ParseFunctionMessage(b []byte) (*FunctionCall, error) {
-	call := new(FunctionCall)
-	if err := json.NewDecoder(bytes.NewReader(b)).Decode(call); err != nil {
-		return nil, err
-	}
-	return call, nil
-}
 
