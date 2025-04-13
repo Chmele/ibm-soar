@@ -24,15 +24,21 @@ type StompListener struct {
 	Conn               *stomp.Conn
 }
 
-func NewStompListener(ctx context.Context, h *HTTPClient, stompPort string, messageDestination string, insecure bool) *StompListener {
-	return &StompListener{
+func NewStompListener(h *HTTPClient, opts ...StompOption) (*StompListener, error) {
+	ret := &StompListener{
 		HTTPClient:         h,
-		StompPort:          stompPort,
-		MessageDestination: messageDestination,
-		Ctx:                ctx,
+		StompPort:          "65001",
+		Ctx:                context.Background(),
 		Done:               make(chan struct{}),
-		Insecure:           insecure,
+		Insecure:           false,
 	}
+	for _, opt := range opts {
+		err := opt(ret)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ret, nil
 }
 
 func (l *StompListener) Listen(f ...FunctionCallHandler) error {
