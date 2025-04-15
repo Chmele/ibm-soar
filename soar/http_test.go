@@ -2,11 +2,12 @@ package soar
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"io"
 	"net/http"
-	"testing"
 	"strings"
-	"encoding/json"
+	"testing"
 )
 
 type mockRoundTripper struct {
@@ -20,7 +21,7 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 func TestNewHTTPClient(t *testing.T) {
 	mockSession := &SessionResponseJson{
 		APIKeyHandle: 444,
-		Orgs: []Org{{ID: 1234}},
+		Orgs:         []Org{{ID: 1234}},
 	}
 	mockBody, _ := json.Marshal(mockSession)
 
@@ -42,6 +43,7 @@ func TestNewHTTPClient(t *testing.T) {
 				},
 			},
 		},
+		Ctx: context.Background(),
 	}
 
 	session, err := client.GetOrg()
@@ -60,9 +62,9 @@ func TestGetMessageDestinationAvailable(t *testing.T) {
 	body, _ := json.Marshal(md)
 
 	client := &HTTPClient{
-		Session: &SessionResponseJson{APIKeyHandle: 42},
-		Org:     &Org{ID: 1234},
-		KeyId:   "id",
+		Session:   &SessionResponseJson{APIKeyHandle: 42},
+		Org:       &Org{ID: 1234},
+		KeyId:     "id",
 		KeySecret: "secret",
 		Hostname:  "test.local",
 		Client: http.Client{
@@ -79,6 +81,7 @@ func TestGetMessageDestinationAvailable(t *testing.T) {
 				},
 			},
 		},
+		Ctx: context.Background(),
 	}
 
 	ok, err := client.GetMessageDestinationAvailable("test")
@@ -108,6 +111,7 @@ func TestOrgRequest(t *testing.T) {
 				},
 			},
 		},
+		Ctx: context.Background(),
 	}
 	resp, err := client.OrgRequest("GET", "test", nil)
 	if err != nil {
@@ -161,6 +165,7 @@ func TestGetInboundDestinationAvailable(t *testing.T) {
 						},
 					},
 				},
+				Ctx: context.Background(),
 			}
 			ok, err := client.GetInboundDestinationAvailable("inbound")
 			if tt.expectedHttpCode != 200 && err == nil {
@@ -187,6 +192,7 @@ func TestGetMessageDestinationAvailable_Error(t *testing.T) {
 				},
 			},
 		},
+		Ctx: context.Background(),
 	}
 
 	ok, err := client.GetMessageDestinationAvailable("missing")
