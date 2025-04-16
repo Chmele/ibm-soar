@@ -33,4 +33,9 @@ func (StompOpts) Insecure(insecure bool) func(*StompListener) error {
 		return nil
 	}
 }
-
+func (StompOpts) Logger(logger *StompLogger) func(*StompListener) error {
+	return func(l *StompListener) error {
+		l.Logger = logger
+		return nil
+	}
+}

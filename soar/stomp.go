@@ -23,6 +23,7 @@ type StompListener struct {
 	Insecure           bool
 	Subscription       *stomp.Subscription
 	Conn               *stomp.Conn
+	Logger             *StompLogger
 }
 
 func NewStompListener(h *HTTPClient, opts ...StompOption) (*StompListener, error) {
@@ -82,6 +83,7 @@ func (l *StompListener) ConnectSTOMP(connection net.Conn) error {
 		stomp.ConnOpt.AcceptVersion(stomp.V12),
 		stomp.ConnOpt.Host(l.HTTPClient.Hostname),
 		stomp.ConnOpt.HeartBeat(0, 0),
+		stomp.ConnOpt.Logger(l.Logger),
 	)
 	if err != nil {
 		return err
