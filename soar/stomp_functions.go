@@ -1,6 +1,7 @@
 package soar
 
 import (
+	"fmt"
 	"log/slog"
 )
 
@@ -28,4 +29,20 @@ func CompletedResponse(c *FunctionCall) (*FuncResponse, error) {
 			Content: "Plain text content",
 		},
 	}, nil
+}
+
+type FunctionLookup struct {
+	mapping map[string]FunctionCallHandler
+}
+
+func (l *FunctionLookup) Register(name string, handler FunctionCallHandler) {
+	l.mapping[name] = handler
+}
+
+func(l *FunctionLookup) Handler(c *FunctionCall) (*FuncResponse, error) {
+	f, ok := l.mapping[c.Function.Name]
+	if !ok {
+		return nil, fmt.Errorf("Got a call with unregistered function name: %s", c.Function.Name)
+	}
+	return f(c)
 }
