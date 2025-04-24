@@ -23,7 +23,7 @@ type StompListener struct {
 	Insecure           bool
 	Subscription       *stomp.Subscription
 	Conn               *stomp.Conn
-	Logger             *StompLogger
+	Logger             *slog.Logger
 }
 
 func NewStompListener(h *HTTPClient, opts ...StompOption) (*StompListener, error) {
@@ -52,12 +52,12 @@ func (l *StompListener) Listen(f ...FunctionCallHandler) error {
 	if err := l.ConnectSTOMP(netConn); err != nil {
 		return err
 	}
-	slog.Info("Connected to STOMP")
+	l.Logger.Info("Connected to STOMP")
 
 	if err := l.Subscribe(); err != nil {
 		return err
 	}
-	slog.Info("Subscribed to queue",
+	l.Logger.Info("Subscribed to queue",
 		slog.String("message_destination", l.MessageDestination))
 	go func() {
 		defer close(l.Done)
@@ -83,7 +83,7 @@ func (l *StompListener) ConnectSTOMP(connection net.Conn) error {
 		stomp.ConnOpt.AcceptVersion(stomp.V12),
 		stomp.ConnOpt.Host(l.HTTPClient.Hostname),
 		stomp.ConnOpt.HeartBeat(0, 0),
-		stomp.ConnOpt.Logger(l.Logger),
+		stomp.ConnOpt.Logger(&StompLogger{l.Logger}),
 	)
 	if err != nil {
 		return err
@@ -94,18 +94,18 @@ func (l *StompListener) ConnectSTOMP(connection net.Conn) error {
 
 func (l *StompListener) STOMPLoop(f ...FunctionCallHandler) error {
 	defer func() {
-		slog.Info("STOMP Disconnecting")
+		l.Logger.Info("STOMP Disconnecting")
 		l.Conn.Disconnect()
 	}()
 	defer func() {
-		slog.Info("STOMP Unsubscribing")
+		l.Logger.Info("STOMP Unsubscribing")
 		l.Subscription.Unsubscribe()
 	}()
 	errCh := make(chan error)
 	for {
 		select {
 		case <-l.Ctx.Done():
-			slog.Info("STOMP is shutting down")
+			l.Logger.Info("STOMP is shutting down")
 			return nil
 		case msg, ok := <-l.Subscription.C:
 			if !ok {

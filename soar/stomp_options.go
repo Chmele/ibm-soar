@@ -3,6 +3,7 @@ package soar
 import (
 	"context"
 	"fmt"
+	"log/slog"
 )
 
 
@@ -33,7 +34,7 @@ func (StompOpts) Insecure(insecure bool) func(*StompListener) error {
 		return nil
 	}
 }
-func (StompOpts) Logger(logger *StompLogger) func(*StompListener) error {
+func (StompOpts) Logger(logger *slog.Logger) func(*StompListener) error {
 	return func(l *StompListener) error {
 		l.Logger = logger
 		return nil
