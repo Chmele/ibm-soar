@@ -101,11 +101,9 @@ func TestStompConnection(t *testing.T) {
 		Done:               make(chan struct{}),
 		Insecure:           true,
 		MessageDestination: "unit-test",
-		Logger: &StompLogger{
-			slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-				Level: slog.LevelDebug,
-			})),
-		},
+		Logger: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		})),
 	}
 
 	fakeConn, err := listener.ConnectMock(mockResponse)
@@ -145,11 +143,9 @@ func TestStompSubscription(t *testing.T) {
 		Done:               make(chan struct{}),
 		Insecure:           true,
 		MessageDestination: "unit-test",
-		Logger: &StompLogger{
-			slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-				Level: slog.LevelDebug,
-			})),
-		},
+		Logger: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		})),
 	}
 
 	fakeConn, err := listener.ConnectMock(mockResponse)
