@@ -14,6 +14,7 @@ import (
 	"github.com/go-stomp/stomp/v3"
 )
 
+// Structure representing a single STOMP connection to a single SOAR message destination
 type StompListener struct {
 	HTTPClient         *HTTPClient
 	StompPort          string
@@ -26,6 +27,7 @@ type StompListener struct {
 	Logger             *slog.Logger
 }
 
+// Creates a stomp listener with connectivity and access check
 func NewStompListener(h *HTTPClient, opts ...StompOption) (*StompListener, error) {
 	ret := &StompListener{
 		HTTPClient: h,
@@ -43,30 +45,32 @@ func NewStompListener(h *HTTPClient, opts ...StompOption) (*StompListener, error
 	return ret, nil
 }
 
+// Main entry point for stomp listening
 func (l *StompListener) Listen(f ...FunctionCallHandler) error {
-	netConn, err := l.ConnectTLS()
+	netConn, err := l.connectTLS()
 	if err != nil {
 		return err
 	}
 
-	if err := l.ConnectSTOMP(netConn); err != nil {
+	if err := l.connectSTOMP(netConn); err != nil {
 		return err
 	}
 	l.Logger.Info("Connected to STOMP")
 
-	if err := l.Subscribe(); err != nil {
+	if err := l.subscribe(); err != nil {
 		return err
 	}
 	l.Logger.Info("Subscribed to queue",
 		slog.String("message_destination", l.MessageDestination))
 	go func() {
 		defer close(l.Done)
-		l.STOMPLoop(f...)
+		l.stompLoop(f...)
 	}()
 	return nil
 }
 
-func (l *StompListener) ConnectTLS() (net.Conn, error) {
+// Fancy stuff for supporting insecure connections
+func (l *StompListener) connectTLS() (net.Conn, error) {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	return tls.DialWithDialer(
 		dialer,
@@ -77,7 +81,8 @@ func (l *StompListener) ConnectTLS() (net.Conn, error) {
 
 }
 
-func (l *StompListener) ConnectSTOMP(connection net.Conn) error {
+// Use stomp library in this func to set up Conn field
+func (l *StompListener) connectSTOMP(connection net.Conn) error {
 	conn, err := stomp.Connect(connection,
 		stomp.ConnOpt.Login(l.HTTPClient.KeyId, l.HTTPClient.KeySecret),
 		stomp.ConnOpt.AcceptVersion(stomp.V12),
@@ -92,7 +97,8 @@ func (l *StompListener) ConnectSTOMP(connection net.Conn) error {
 	return nil
 }
 
-func (l *StompListener) STOMPLoop(f ...FunctionCallHandler) error {
+// Endless listening loop for message channel
+func (l *StompListener) stompLoop(f ...FunctionCallHandler) error {
 	defer func() {
 		l.Logger.Info("STOMP Disconnecting")
 		l.Conn.Disconnect()
@@ -112,7 +118,7 @@ func (l *StompListener) STOMPLoop(f ...FunctionCallHandler) error {
 				return errors.New("Attempted to read closed STOMP channel")
 			}
 			go func() {
-				errCh <- l.HandleFunc(f...)(msg)
+				errCh <- l.handleFunc(f...)(msg)
 			}()
 		case err := <-errCh:
 			if err != nil {
@@ -122,10 +128,14 @@ func (l *StompListener) STOMPLoop(f ...FunctionCallHandler) error {
 	}
 }
 
+// The function that is either writes the response to a message or returns an error
 type ProcessFunc func(*stomp.Message) error
+
+// The function used as a part of a response to message (updates the processing status, logs the message, etc.)
 type FunctionCallHandler func(*FunctionCall) (*FuncResponse, error)
 
-func (l *StompListener) Subscribe() error {
+// Fancy hardcoded internal queue names here and "just working" constants
+func (l *StompListener) subscribe() error {
 	Id := fmt.Sprintf("actions.%d.%s", l.HTTPClient.Org.ID, l.MessageDestination)
 	sub, err := l.Conn.Subscribe(
 		Id,
@@ -140,9 +150,10 @@ func (l *StompListener) Subscribe() error {
 	return nil
 }
 
-func (l *StompListener) HandleFunc(functions ...FunctionCallHandler) ProcessFunc {
+// Calling handlers one-by-one, responding with updated run statuses and result as handlers suggest (JSON)
+func (l *StompListener) handleFunc(functions ...FunctionCallHandler) ProcessFunc {
 	return func(msg *stomp.Message) error {
-		fc, err := ParseFunctionMessage(msg.Body)
+		fc, err := parseFunctionMessage(msg.Body)
 		if err != nil {
 			return err
 		}
@@ -159,7 +170,7 @@ func (l *StompListener) HandleFunc(functions ...FunctionCallHandler) ProcessFunc
 			if err != nil {
 				return err
 			}
-			if err := l.SendFunctionResponse(msg, body); err != nil {
+			if err := l.sendFunctionResponse(msg, body); err != nil {
 				return err
 			}
 		}
@@ -167,7 +178,8 @@ func (l *StompListener) HandleFunc(functions ...FunctionCallHandler) ProcessFunc
 	}
 }
 
-func (l *StompListener) SendFunctionResponse(msg *stomp.Message, body []byte) error {
+// Responds, specifing the message it responds to with the bytes provided
+func (l *StompListener) sendFunctionResponse(msg *stomp.Message, body []byte) error {
 	correlationID := msg.Header.Get("correlation-id")
 	return l.Conn.Send(
 		fmt.Sprintf("acks.%d.%s", l.HTTPClient.Org.ID, l.MessageDestination),
@@ -177,7 +189,8 @@ func (l *StompListener) SendFunctionResponse(msg *stomp.Message, body []byte) er
 	)
 }
 
-func ParseFunctionMessage(b []byte) (*FunctionCall, error) {
+// Decodes received function call STOMP message
+func parseFunctionMessage(b []byte) (*FunctionCall, error) {
 	call := new(FunctionCall)
 	if err := json.NewDecoder(bytes.NewReader(b)).Decode(call); err != nil {
 		return nil, err
