@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"github.com/chmele/ibm-soar/soar/structures"
 )
 
 type mockRoundTripper struct {
@@ -19,9 +20,9 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 }
 
 func TestNewHTTPClient(t *testing.T) {
-	mockSession := &SessionResponseJson{
+	mockSession := &structures.SessionResponseJson{
 		APIKeyHandle: 444,
-		Orgs:         []Org{{ID: 1234}},
+		Orgs:         []structures.Org{{ID: 1234}},
 	}
 	mockBody, _ := json.Marshal(mockSession)
 
@@ -56,14 +57,14 @@ func TestNewHTTPClient(t *testing.T) {
 }
 
 func TestGetMessageDestinationAvailable(t *testing.T) {
-	md := MessageDestination{
+	md := structures.MessageDestination{
 		APIKeys: []int{42},
 	}
 	body, _ := json.Marshal(md)
 
 	client := &HTTPClient{
-		Session:   &SessionResponseJson{APIKeyHandle: 42},
-		Org:       &Org{ID: 1234},
+		Session:   &structures.SessionResponseJson{APIKeyHandle: 42},
+		Org:       &structures.Org{ID: 1234},
 		KeyId:     "id",
 		KeySecret: "secret",
 		Hostname:  "test.local",
@@ -95,7 +96,7 @@ func TestGetMessageDestinationAvailable(t *testing.T) {
 
 func TestOrgRequest(t *testing.T) {
 	client := &HTTPClient{
-		Org: &Org{ID: 99},
+		Org: &structures.Org{ID: 99},
 		Client: http.Client{
 			Transport: &mockRoundTripper{
 				roundTripFunc: func(req *http.Request) *http.Response {
@@ -141,8 +142,8 @@ func TestGetInboundDestinationAvailable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &HTTPClient{
-				Session: &SessionResponseJson{APIKeyHandle: 42},
-				Org:     &Org{ID: 1},
+				Session: &structures.SessionResponseJson{APIKeyHandle: 42},
+				Org:     &structures.Org{ID: 1},
 				Client: http.Client{
 					Transport: &mockRoundTripper{
 						roundTripFunc: func(req *http.Request) *http.Response {
@@ -152,7 +153,7 @@ func TestGetInboundDestinationAvailable(t *testing.T) {
 									Body:       io.NopCloser(strings.NewReader("unauthorized")),
 								}
 							}
-							resp := InboundDestination{
+							resp := structures.InboundDestination{
 								ReadPrincipals:  tt.read,
 								WritePrincipals: tt.write,
 							}
@@ -180,8 +181,8 @@ func TestGetInboundDestinationAvailable(t *testing.T) {
 
 func TestGetMessageDestinationAvailable_Error(t *testing.T) {
 	client := &HTTPClient{
-		Session: &SessionResponseJson{APIKeyHandle: 444},
-		Org:     &Org{ID: 42},
+		Session: &structures.SessionResponseJson{APIKeyHandle: 444},
+		Org:     &structures.Org{ID: 42},
 		Client: http.Client{
 			Transport: &mockRoundTripper{
 				roundTripFunc: func(req *http.Request) *http.Response {

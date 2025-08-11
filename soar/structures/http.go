@@ -1,4 +1,4 @@
-package soar
+package structures
 
 type SessionResponseJson struct {
 	Orgs                   []Org `json:"orgs"`

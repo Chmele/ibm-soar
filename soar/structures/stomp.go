@@ -1,4 +1,4 @@
-package soar
+package structures
 
 type FunctionCall struct {
 	Function         Function         `json:"function"`

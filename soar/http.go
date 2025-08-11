@@ -11,12 +11,13 @@ import (
 	"net/http"
 	"slices"
 	"time"
+	"github.com/chmele/ibm-soar/soar/structures"
 )
 
 type HTTPClient struct {
 	Client    http.Client
-	Session   *SessionResponseJson
-	Org       *Org
+	Session   *structures.SessionResponseJson
+	Org       *structures.Org
 	KeyId     string
 	KeySecret string
 	Hostname  string
@@ -56,7 +57,7 @@ func (s *HTTPClient) Request(method, url string, data io.Reader) (*http.Response
 	return s.Client.Do(req)
 }
 
-func (s *HTTPClient) GetOrg() (session *SessionResponseJson, err error) {
+func (s *HTTPClient) GetOrg() (session *structures.SessionResponseJson, err error) {
 	resp, err := s.Request("GET", "session", nil)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (s *HTTPClient) GetOrg() (session *SessionResponseJson, err error) {
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("Error connecting to SOAR, status: %s", resp.Status)
 	}
-	body := new(SessionResponseJson)
+	body := new(structures.SessionResponseJson)
 	if err := json.NewDecoder(resp.Body).Decode(body); err != nil {
 		return nil, err
 	}
@@ -85,7 +86,7 @@ func (s *HTTPClient) GetMessageDestinationAvailable(name string) (bool, error) {
 		return false, err
 	}
 	defer resp.Body.Close()
-	var md MessageDestination
+	var md structures.MessageDestination
 	if err := json.NewDecoder(resp.Body).Decode(&md); err != nil {
 		return false, err
 	}
@@ -98,7 +99,7 @@ func (s *HTTPClient) GetInboundDestinationAvailable(name string) (bool, error) {
 		return false, err
 	}
 	defer resp.Body.Close()
-	var md InboundDestination
+	var md structures.InboundDestination
 	if err := json.NewDecoder(resp.Body).Decode(&md); err != nil {
 		return false, err
 	}

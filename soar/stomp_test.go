@@ -9,6 +9,7 @@ import (
 	"os"
 	"testing"
 	"time"
+	"github.com/chmele/ibm-soar/soar/structures"
 )
 
 type FakeConn struct {
@@ -68,7 +69,7 @@ func (l *StompListener) ConnectMock(prewritten []byte) (*FakeConn, error) {
 		WriteNotify: writeNotify,
 	}
 
-	err := l.ConnectSTOMP(fakeConn)
+	err := l.connectSTOMP(fakeConn)
 	return fakeConn, err
 }
 
@@ -89,7 +90,7 @@ func TestStompConnection(t *testing.T) {
 		Hostname:  "test-host",
 		KeyId:     "test-id",
 		KeySecret: "test-secret",
-		Org:       &Org{ID: 123},
+		Org:       &structures.Org{ID: 123},
 	}
 
 	mockResponse := []byte("CONNECTED\nversion:1.2\n\n\x00")
@@ -131,7 +132,7 @@ func TestStompSubscription(t *testing.T) {
 		Hostname:  "test-host",
 		KeyId:     "test-id",
 		KeySecret: "test-secret",
-		Org:       &Org{ID: 123},
+		Org:       &structures.Org{ID: 123},
 	}
 
 	mockResponse := []byte("CONNECTED\nversion:1.2\n\n\x00")
@@ -152,7 +153,7 @@ func TestStompSubscription(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create mock connection: %v", err)
 	}
-	if err := listener.Subscribe(); err != nil {
+	if err := listener.subscribe(); err != nil {
 		t.Fatalf("Failed to subscibe %v", err)
 	}
 	var actual []byte

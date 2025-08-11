@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-stomp/stomp/v3"
+	"github.com/chmele/ibm-soar/soar/structures"
 )
 
 // Structure representing a single STOMP connection to a single SOAR message destination
@@ -132,7 +133,7 @@ func (l *StompListener) stompLoop(f ...FunctionCallHandler) error {
 type ProcessFunc func(*stomp.Message) error
 
 // The function used as a part of a response to message (updates the processing status, logs the message, etc.)
-type FunctionCallHandler func(*FunctionCall) (*FuncResponse, error)
+type FunctionCallHandler func(*structures.FunctionCall) (*structures.FuncResponse, error)
 
 // Fancy hardcoded internal queue names here and "just working" constants
 func (l *StompListener) subscribe() error {
@@ -190,8 +191,8 @@ func (l *StompListener) sendFunctionResponse(msg *stomp.Message, body []byte) er
 }
 
 // Decodes received function call STOMP message
-func parseFunctionMessage(b []byte) (*FunctionCall, error) {
-	call := new(FunctionCall)
+func parseFunctionMessage(b []byte) (*structures.FunctionCall, error) {
+	call := new(structures.FunctionCall)
 	if err := json.NewDecoder(bytes.NewReader(b)).Decode(call); err != nil {
 		return nil, err
 	}
