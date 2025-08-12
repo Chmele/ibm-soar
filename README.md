@@ -7,6 +7,8 @@ This package enables the development and execution of custom IBM SOAR functions 
 - Integrate existing Go libraries and tooling into SOAR playbooks.
 - Build specialized utilities for SOAR administering and maintenance.
 
+> Usage example can be found in 'rest_integration' folder
+
 ## Features & design principles
 - STOMP Listener checks SOAR connectivity and credentials provided upon creation of struct.
 - Dedicated listener per STOMP queue.
